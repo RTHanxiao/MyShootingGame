@@ -1,0 +1,32 @@
+#pragma once
+
+#include "NativeGameplayTags.h"
+
+namespace FragmentTags
+{
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GridFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(IconFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(StackableFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(ConsumableFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(EquipmentFragment);
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(TextFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(PrimaryStateFragment);
+
+	namespace StatMod
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatMod1);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatMod2);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatMod3);
+	}
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponAmmoFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponFireControlFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponFireConfigFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponDamageFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponImpactFxFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponHitResolveFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponRecoilFragment);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WeaponReloadConfigFragment);
+
+}
