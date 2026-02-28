@@ -12,11 +12,11 @@ void UUI_HallMain::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 绑定动画结束回调
-	BindAnimFinished(MainMenuAnim, TEXT("OnMainMenuAnimFinished"));
-	BindAnimFinished(OutfitMenuAnim, TEXT("OnOutfitMenuAnimFinished"));
-	BindAnimFinished(MapMenuAnim, TEXT("OnMapMenuAnimFinished"));
-	BindAnimFinished(ConfigMenuAnim, TEXT("OnConfigMenuAnimFinished"));
+	//// 绑定动画结束回调
+	//BindAnimFinished(MainMenuAnim, TEXT("OnMainMenuAnimFinished"));
+	//BindAnimFinished(OutfitMenuAnim, TEXT("OnOutfitMenuAnimFinished"));
+	//BindAnimFinished(MapMenuAnim, TEXT("OnMapMenuAnimFinished"));
+	//BindAnimFinished(ConfigMenuAnim, TEXT("OnConfigMenuAnimFinished"));
 
 }
 

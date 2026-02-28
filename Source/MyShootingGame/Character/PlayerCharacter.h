@@ -6,6 +6,8 @@
 #include "MyShootingGame/Character/MyCharacter.h"
 #include "InputActionValue.h"
 #include "GameplayTagContainer.h"
+#include "UnLuaInterface.h"
+#include "../Logic/Fire/MSG_FireRUleOwnerInterface.h"
 #include "PlayerCharacter.generated.h"
 
 class USpringArmComponent;
@@ -18,12 +20,15 @@ class UInv_EquipmentComponent;
 class UInv_InventoryItem;
 
 class AInv_EquipWeaponActor;
+class UMSG_FireRuleComponent;
+struct FMSG_ReloadDecision;
+struct FMSG_ReloadContext;
 
 /**
  *
  */
 UCLASS()
-class MYSHOOTINGGAME_API APlayerCharacter : public AMyCharacter
+class MYSHOOTINGGAME_API APlayerCharacter : public AMyCharacter, public IUnLuaInterface, public IMSG_FireRuleOwnerInterface
 {
 	GENERATED_BODY()
 
@@ -74,6 +79,9 @@ protected:
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* DeathCameraSpringArm = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fire", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UMSG_FireRuleComponent> FireRuleComp;
 
 	// ===== Input =====
 	UPROPERTY(EditDefaultsOnly, Category = "PlayerInput", meta = (AllowPrivateAccess = "true"))
@@ -168,6 +176,14 @@ protected:
 	void Melee();
 	void Fire();
 	void StopFire();
+
+	UPROPERTY(EditAnywhere, Category = "UnLua")
+	FString LuaModuleName = TEXT("Gameplay.FireRule");
+
+	virtual FString GetModuleName_Implementation() const override { return LuaModuleName; }
+
+	// 接口的默认实现（Lua 不工作时仍能跑）
+	virtual FMSG_FireRuleResult EvaluateFireRule_Implementation(const FMSG_FireRuleContext& Ctx) override;
 
 	// ===== Reload =====
 	UFUNCTION(BlueprintCallable, Category = "Weapon")

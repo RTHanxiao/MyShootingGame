@@ -8,6 +8,7 @@
 #include "MSG_UserWidgetBase.generated.h"
 
 class AItemPreviewActor;
+class UTextBlock;
 /**
  * 
  */
@@ -19,6 +20,9 @@ class MYSHOOTINGGAME_API UMSG_UserWidgetBase : public UUserWidget, public IUnLua
 public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UnLua")
 	FString LuaModuleName;
+
+	UFUNCTION(BlueprintCallable, Category = "UnLua|UI")
+	static void SetTextBlockColor(UTextBlock* Text, const FLinearColor& Color);
 
 	virtual FString GetModuleName_Implementation() const override
 	{

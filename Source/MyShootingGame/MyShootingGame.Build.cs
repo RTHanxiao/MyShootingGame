@@ -22,10 +22,13 @@ public class MyShootingGame : ModuleRules
 			"GameplayTasks", 
 			"Inventory" ,
 			"GameplayTags",
-			"Unlua",
+			"UnLua",
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		PrivateDependencyModuleNames.AddRange(new string[] 
+		{ 
+
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

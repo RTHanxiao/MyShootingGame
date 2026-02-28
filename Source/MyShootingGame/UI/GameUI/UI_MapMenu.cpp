@@ -24,9 +24,9 @@ void UUI_MapMenu::NativeConstruct()
 
 	if (Btn_Start)
 	{
-		Btn_Start->OnClicked.AddDynamic(this, &UUI_MapMenu::BtnStartClicked);
-		Btn_Start->OnHovered.AddDynamic(this, &UUI_MapMenu::BtnStartHoverd);
-		Btn_Start->OnUnhovered.AddDynamic(this, &UUI_MapMenu::BtnStartUnHoverd);
+		//Btn_Start->OnClicked.AddDynamic(this, &UUI_MapMenu::BtnStartClicked);
+		//Btn_Start->OnHovered.AddDynamic(this, &UUI_MapMenu::BtnStartHoverd);
+		//Btn_Start->OnUnhovered.AddDynamic(this, &UUI_MapMenu::BtnStartUnHoverd);
 	}
 
 	Btn_Back->OnClicked.AddDynamic(this, &UUI_MapMenu::BtnBackClicked);

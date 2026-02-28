@@ -25,11 +25,11 @@ void UUI_OutfitMenu::NativeConstruct()
 
 	InitWrapBoxWithSkinSlots();
 	
-	Btn_Map->OnHovered.AddDynamic(this, &UUI_OutfitMenu::BtnMapHover);
-	Btn_Map->OnUnhovered.AddDynamic(this, &UUI_OutfitMenu::BtnMapUnHover);
-	Btn_Map->OnClicked.AddDynamic(this, &UUI_OutfitMenu::BtnMapClicked);
-	
-	Btn_Back->OnClicked.AddDynamic(this, &UUI_OutfitMenu::BtnBackClicked);
+	//Btn_Map->OnHovered.AddDynamic(this, &UUI_OutfitMenu::BtnMapHover);
+	//Btn_Map->OnUnhovered.AddDynamic(this, &UUI_OutfitMenu::BtnMapUnHover);
+	//Btn_Map->OnClicked.AddDynamic(this, &UUI_OutfitMenu::BtnMapClicked);
+	//
+	//Btn_Back->OnClicked.AddDynamic(this, &UUI_OutfitMenu::BtnBackClicked);
 
 	
 }

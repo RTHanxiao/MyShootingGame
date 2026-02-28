@@ -25,6 +25,11 @@
 #include "GameplayTagContainer.h"
 #include "MyShootingGame/Items/Weapon/Inv_EquipWeaponActor.h"
 #include "MyShootingGame/Items/Weapon/Inv_WeaponFragments.h"
+#include "MyShootingGame/Logic/Fire/MSG_FireRule.h"
+#include "MyShootingGame/Logic/Fire/MSG_FireRuleComponent.h"
+#include "Items/Component/Inv_ItemComponent.h"
+
+
 
 static FGameplayTag GetRifleRootTag()
 {
@@ -58,6 +63,9 @@ APlayerCharacter::APlayerCharacter()
 
 	DeathCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("DeathCamera"));
 	DeathCamera->SetupAttachment(DeathCameraSpringArm);
+
+	FireRuleComp = CreateDefaultSubobject<UMSG_FireRuleComponent>(TEXT("FireRule"));
+	ReloadRuleComp = CreateDefaultSubobject<UMSG_ReloadRuleComponent>(TEXT("ReloadRuleComp"));
 
 	CurrentWeapon = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CurrentWeapon"));
 	CurrentWeapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, TEXT("WeaponSlot"));
@@ -373,7 +381,7 @@ void APlayerCharacter::PlayerAttack()
 
 void APlayerCharacter::Melee()
 {
-	// 你原来的近战逻辑
+	// TODO
 }
 
 void APlayerCharacter::Fire()
@@ -407,6 +415,7 @@ void APlayerCharacter::Fire()
 		return;
 	}
 
+	// ✅ 空弹匣直接返回：避免无意义规则评估
 	if (!WeaponActor->HasAmmoInMag())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[Fire] Empty mag"));
@@ -414,11 +423,43 @@ void APlayerCharacter::Fire()
 		return;
 	}
 
+	// --- FireRule: 构建上下文 ---
+	FMSG_FireRuleContext Ctx;
+	Ctx.bOnHit = bOnHit;
+	Ctx.bIsArmed = bIsArmed;
+	Ctx.bWeaponAutoFire = WeaponActor->IsAutoFire();
+	Ctx.WeaponAttackRate = WeaponActor->GetAttackRate();
+	Ctx.CrossHairSpreadIncrement = CrossHairSpreadIncrement;
+	Ctx.bIsAiming = bAiming;
+	// Ctx.bIsSprinting = bIsSprinting;
+	// Ctx.bIsReloading = bIsReloading;
+
+	FMSG_FireRuleResult Rule; // 默认：允许开火，不覆盖参数
+	if (FireRuleComp)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[FireRule] Comp=%s"), *GetNameSafe(FireRuleComp));
+		Rule = FireRuleComp->EvaluateRule(Ctx);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[FireRule] Result: CanFire=%d RateOv=%.3f SpreadOv=%.3f"),
+		Rule.bCanFire, Rule.FireIntervalOverride, Rule.SpreadIncrementOverride);
+
+	if (!Rule.bCanFire)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Fire] Abort: blocked by FireRule"));
+		return;
+	}
+
+	// 扩散增量覆盖
+	const float SpreadInc = (Rule.SpreadIncrementOverride >= 0.f)
+		? Rule.SpreadIncrementOverride
+		: CrossHairSpreadIncrement;
+
 	UE_LOG(LogTemp, Warning, TEXT("[Fire] ShootOnce (first shot)"));
 	WeaponActor->ShootOnce();
 
 	StartPitchRecoilEvent(CheckPitchOffset());
-	CrossHairSpreadInc(CrossHairSpreadIncrement);
+	CrossHairSpreadInc(SpreadInc);
 
 	if (!WeaponActor->IsAutoFire())
 	{
@@ -426,12 +467,16 @@ void APlayerCharacter::Fire()
 		return;
 	}
 
-	const float Rate = FMath::Max(0.01f, WeaponActor->GetAttackRate());
+	// 自动射速覆盖
+	const float RateBase = WeaponActor->GetAttackRate();
+	const float RateLua = (Rule.FireIntervalOverride > 0.f) ? Rule.FireIntervalOverride : RateBase;
+	const float Rate = FMath::Max(0.01f, RateLua);
+
 	UE_LOG(LogTemp, Warning, TEXT("[Fire] AutoFire ON, Rate = %.3f"), Rate);
 
 	GetWorld()->GetTimerManager().SetTimer(
 		FireRateHandle,
-		[this]()
+		[this, SpreadInc]()
 		{
 			AInv_EquipWeaponActor* CurWeaponActor = GetActiveEquipWeaponActor();
 			UE_LOG(LogTemp, Warning, TEXT("[Fire-Timer] Tick WeaponActor=%s"), *GetNameSafe(CurWeaponActor));
@@ -455,7 +500,7 @@ void APlayerCharacter::Fire()
 			CurWeaponActor->ShootOnce();
 
 			StartPitchRecoilEvent(CheckPitchOffset());
-			CrossHairSpreadInc(CrossHairSpreadIncrement);
+			CrossHairSpreadInc(SpreadInc);
 
 			if (!CurWeaponActor->IsAutoFire())
 			{
@@ -515,6 +560,12 @@ void APlayerCharacter::Notify_ReloadWeaponAnim()
 	{
 		WeaponActor->PlayWeaponReloadAnim();
 	}
+}
+
+
+FMSG_FireRuleResult APlayerCharacter::EvaluateFireRule_Implementation(const FMSG_FireRuleContext& Ctx)
+{
+	return FMSG_FireRuleResult{};
 }
 
 void APlayerCharacter::CommitReload()

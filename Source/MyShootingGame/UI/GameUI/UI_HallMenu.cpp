@@ -21,24 +21,24 @@ void UUI_HallMenu::NativeConstruct()
 	
 	UE_LOG(LogTemp, Warning, TEXT("UUI_HallMenu::NativeConstruct"));
 
-	//悬停函数绑定
-	Btn_Single->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnSingleHover);
-	Btn_Single->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnSingleUnHover);
+	////悬停函数绑定
+	//Btn_Single->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnSingleHover);
+	//Btn_Single->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnSingleUnHover);
 
-	Btn_Multi->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnMultiHover);
-	Btn_Multi->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnMultiUnHover);
+	//Btn_Multi->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnMultiHover);
+	//Btn_Multi->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnMultiUnHover);
 
-	Btn_Cfg->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnCfgHover);
-	Btn_Cfg->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnCfgUnHover);
+	//Btn_Cfg->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnCfgHover);
+	//Btn_Cfg->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnCfgUnHover);
 
-	Btn_Exit->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnExitHover);
-	Btn_Exit->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnExitUnHover);
+	//Btn_Exit->OnHovered.AddDynamic(this, &UUI_HallMenu::BtnExitHover);
+	//Btn_Exit->OnUnhovered.AddDynamic(this, &UUI_HallMenu::BtnExitUnHover);
 
-	//点击函数绑定
-	Btn_Single->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnSingleClicked);
-	Btn_Multi->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnMultiClicked);
-	Btn_Cfg->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnCfgClicked);
-	Btn_Exit->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnExitClicked);
+	////点击函数绑定
+	//Btn_Single->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnSingleClicked);
+	//Btn_Multi->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnMultiClicked);
+	//Btn_Cfg->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnCfgClicked);
+	//Btn_Exit->OnClicked.AddDynamic(this, &UUI_HallMenu::BtnExitClicked);
 }
 
 /// <summary>
