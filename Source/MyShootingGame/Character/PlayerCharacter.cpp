@@ -65,7 +65,6 @@ APlayerCharacter::APlayerCharacter()
 	DeathCamera->SetupAttachment(DeathCameraSpringArm);
 
 	FireRuleComp = CreateDefaultSubobject<UMSG_FireRuleComponent>(TEXT("FireRule"));
-	ReloadRuleComp = CreateDefaultSubobject<UMSG_ReloadRuleComponent>(TEXT("ReloadRuleComp"));
 
 	CurrentWeapon = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CurrentWeapon"));
 	CurrentWeapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, TEXT("WeaponSlot"));
