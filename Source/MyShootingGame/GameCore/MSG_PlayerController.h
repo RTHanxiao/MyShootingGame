@@ -68,6 +68,9 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_ApplyFightMode(TSubclassOf<APawn> InPawnClass, TSubclassOf<AHUD> InHUDClass);
 
+	UFUNCTION(Exec)
+	void HotReloadLua();
+
 protected:
 	/** 是否启用大厅模式（鼠标边缘旋转视角 + UI Only 输入） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MSG|Hall")

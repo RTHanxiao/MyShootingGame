@@ -20,3 +20,4 @@ D:\UnrealProj\MyShootingGame\Plugins\UnLua\Source\UnLuaDefaultParamCollectorUbtP
 D:\UnrealProj\MyShootingGame\Plugins\UnLua\Source\UnLuaDefaultParamCollectorUbtPlugin\obj\Development\UnLuaDefaultParamCollectorUbtPlugin.dll
 D:\UnrealProj\MyShootingGame\Plugins\UnLua\Source\UnLuaDefaultParamCollectorUbtPlugin\obj\Development\refint\UnLuaDefaultParamCollectorUbtPlugin.dll
 D:\UnrealProj\MyShootingGame\Plugins\UnLua\Source\UnLuaDefaultParamCollectorUbtPlugin\obj\Development\UnLuaDefaultParamCollectorUbtPlugin.pdb
+D:\UnrealProj\MyShootingGame\Plugins\UnLua\Source\UnLuaDefaultParamCollectorUbtPlugin\obj\Development\UnLuaDefaultParamCollectorUbtPlugin.ubtplugin.sourcelink.json

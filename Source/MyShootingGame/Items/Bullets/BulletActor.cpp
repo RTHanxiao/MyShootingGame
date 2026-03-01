@@ -31,7 +31,7 @@ void ABulletActor::OnPickedUp(AActor* Picker)
 	UInv_InventoryComponent* InvComp = PC->FindComponentByClass<UInv_InventoryComponent>();
 	if (!InvComp || !ItemComponent) return;
 
-	// ✅ 统一入口：把世界物体的 ItemComp 交给背包
+	//  统一入口：把世界物体的 ItemComp 交给背包
 	const bool bAdded = InvComp->TryAddItem(ItemComponent);
 	if (bAdded)
 	{

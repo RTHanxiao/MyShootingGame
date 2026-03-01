@@ -13,22 +13,28 @@
 void UBTS_CheckDistance::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
-	if (AZombieAIController* AIController = Cast<AZombieAIController>(OwnerComp.GetAIOwner()))
+
+	AZombieAIController* AIController = Cast<AZombieAIController>(OwnerComp.GetAIOwner());
+	if (!AIController) return;
+
+	AZombieCharacter* ZombieCharacter = Cast<AZombieCharacter>(AIController->GetPawn());
+	if (!ZombieCharacter) return;
+
+	UBlackboardComponent* BB = AIController->GetBlackboardComponent();
+	if (!BB) return;
+
+	AActor* Target = Cast<AActor>(BB->GetValueAsObject("Target_Player"));
+	if (!Target)
 	{
-		if (AZombieCharacter* ZombieCharacter = Cast<AZombieCharacter>(AIController->GetPawn()))
-		{
-			if (ZombieCharacter->TargetPlayer)
-			{
-				float PlayerDistance = FVector::Dist(ZombieCharacter->GetActorLocation(), ZombieCharacter->TargetPlayer->GetActorLocation());
-				if (PlayerDistance < 120.f)
-				{
-					AIController->GetBlackboardComponent()->SetValueAsBool("IsAttacking", true);
-				}
-				else
-				{
-					AIController->GetBlackboardComponent()->SetValueAsBool("IsAttacking", false);
-				}
-			}
-		}
+		BB->SetValueAsBool("InAttackRange", false);
+		return;
 	}
+
+	const float Dist = FVector::Dist(ZombieCharacter->GetActorLocation(), Target->GetActorLocation());
+	BB->SetValueAsFloat("TargetDistance", Dist);
+
+	const bool bInAttackRange = (Dist <= 120.f);
+	BB->SetValueAsBool("InAttackRange", bInAttackRange);
+
+	 UE_LOG(LogTemp, Warning, TEXT("[CheckDistance] Dist=%.1f InAttackRange=%d"), Dist, bInAttackRange ? 1 : 0);
 }

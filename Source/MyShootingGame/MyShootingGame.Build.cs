@@ -23,7 +23,9 @@ public class MyShootingGame : ModuleRules
 			"Inventory" ,
 			"GameplayTags",
 			"UnLua",
-		});
+			"LuaFrameWork",
+            "NavigationSystem",
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] 
 		{ 

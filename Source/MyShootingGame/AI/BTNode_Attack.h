@@ -16,5 +16,14 @@ class MYSHOOTINGGAME_API UBTNode_Attack : public UBTTaskNode
 	
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 	
-	
+
+protected:
+	UPROPERTY()
+	TObjectPtr<UBehaviorTreeComponent> CachedOwnerComp;
+
+	UFUNCTION()
+	void OnAttackFinished();
+
+	virtual void OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult) override;
+
 };

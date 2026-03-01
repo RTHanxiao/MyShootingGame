@@ -12,6 +12,9 @@
 #include "InputMappingContext.h"
 
 #include "InventoryManagement/Components/Inv_InventoryComponent.h"
+#include "Service/LuaGameService.h"
+#include "Service/LuaWorldService.h"
+#include "Service/HotReload.h"
 
 AMSG_PlayerController::AMSG_PlayerController()
 {
@@ -228,6 +231,31 @@ void AMSG_PlayerController::Client_ApplyFightMode_Implementation(
 
 		SetViewTargetWithBlend(ExistPawn, 0.5f);
 	}
+}
+
+void AMSG_PlayerController::HotReloadLua()
+{
+	const int32 EnvCount = ULuaHotReloadLibrary::HotReloadAllLuaEnvs();
+
+	// 通知 GameService（跨地图）
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (ULuaGameService* GS = GI->GetSubsystem<ULuaGameService>())
+		{
+			GS->LuaOnHotReloaded(EnvCount);
+		}
+	}
+
+	// 通知 WorldService（当前世界）
+	if (UWorld* World = GetWorld())
+	{
+		if (ULuaWorldService* WS = World->GetSubsystem<ULuaWorldService>())
+		{
+			WS->LuaOnHotReloaded(EnvCount);
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[HotReloadLua] done, envCount=%d"), EnvCount);
 }
 
 // =========================
