@@ -13,7 +13,7 @@ UCLASS()
 class INVENTORY_API AInv_EquipActor : public AActor
 {
 	GENERATED_BODY()
-	
+
 public:
 	AInv_EquipActor();
 	FGameplayTag GetEquipmentType() const { return EquipmentType; }
@@ -21,8 +21,9 @@ public:
 
 	virtual void InitFromItem(UInv_InventoryItem* InItem) { EquippedItem = InItem; }
 	virtual void BindItem(UInv_InventoryItem* InItem) {}
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 private:
-	UPROPERTY(EditAnywhere,Category = "Inventory")
+	UPROPERTY(EditAnywhere, Replicated, Category = "Inventory")
 	FGameplayTag EquipmentType;
 
 	UPROPERTY()

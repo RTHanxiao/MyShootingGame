@@ -15,6 +15,7 @@
 #include "Service/LuaGameService.h"
 #include "Service/LuaWorldService.h"
 #include "Service/HotReload.h"
+#include "../MyShootingGameModeBase.h"
 
 AMSG_PlayerController::AMSG_PlayerController()
 {
@@ -30,6 +31,15 @@ void AMSG_PlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (IsLocalController())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[InputState] PC=%s MoveIgnore=%d LookIgnore=%d Mouse=%d"),
+			*GetNameSafe(this),
+			IsMoveInputIgnored() ? 1 : 0,
+			IsLookInputIgnored() ? 1 : 0,
+			bShowMouseCursor ? 1 : 0);
+	}
+
 	if (ULocalPlayer* LP = GetLocalPlayer())
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsys =
@@ -43,17 +53,133 @@ void AMSG_PlayerController::BeginPlay()
 	}
 
 	// 按当前模式设置输入方式
-	SetHallControlMode(bEnableHallMode);
+	//SetHallControlMode(bEnableHallMode);
 
 	InventoryComponent = FindComponentByClass<UInv_InventoryComponent>();
 
 	UE_LOG(LogTemp, Warning, TEXT("[Inventory] PC BeginPlay: InvComponent = %s"),
 		InventoryComponent.Get() != nullptr ? TEXT("Valid") : TEXT("Invalid"));
+
+	UE_LOG(LogTemp, Warning, TEXT("[PC] %s Local=%d HasAuth=%d Pawn=%s"),
+		*GetNameSafe(this),
+		IsLocalController(),
+		HasAuthority(),
+		*GetNameSafe(GetPawn()));
+
+	ShowStartupUI_Local();
+}
+
+void AMSG_PlayerController::Client_ShowStartupUI_Implementation()
+{
+	ShowStartupUI_Local();
+}
+
+void AMSG_PlayerController::ShowStartupUI_Local()
+{
+	if (!IsLocalController()) return;
+	if (!StartupWidgetClass) return;
+
+	if (!StartupWidget)
+	{
+		StartupWidget = CreateWidget<UUserWidget>(this, StartupWidgetClass);
+	}
+
+	if (StartupWidget && !StartupWidget->IsInViewport())
+	{
+		StartupWidget->AddToViewport(9999);
+	}
+
+	// 先 UIOnly，避免玩家在没初始化好时乱动
+	bShowMouseCursor = true;
+	FInputModeUIOnly M;
+	M.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(M);
+}
+
+void AMSG_PlayerController::Server_TryAddItem_Implementation(UInv_ItemComponent* ItemComp)
+{
+	if (!ItemComp) return;
+
+	// 服务器侧找 InventoryComponent
+	if (!GetInventoryComponent().IsValid())
+	{
+		return;
+	}
+
+	GetInventoryComponent().Get()->TryAddItem(ItemComp);
+}
+
+void AMSG_PlayerController::Server_TryPickupActor_Implementation(AActor* ItemActor)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[Pickup][Server] PCClass=%s"), *GetNameSafe(GetClass()));
+	if (!ItemActor) return;
+	TArray<UActorComponent*> Comps;
+	GetComponents(Comps);
+	for (UActorComponent* C : Comps)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Pickup][Server] PCComp=%s Class=%s"),
+			*GetNameSafe(C), *GetNameSafe(C->GetClass()));
+	}
+	APawn* P = GetPawn();
+	if (!P) return;
+
+	// 距离校验
+	const float DistSq = FVector::DistSquared(P->GetActorLocation(), ItemActor->GetActorLocation());
+	if (DistSq > FMath::Square(250.f))
+	{
+		return;
+	}
+
+	// 服务器侧找物品组件（不要依赖 PC 成员变量）
+	UInv_ItemComponent* ItemComp = ItemActor->FindComponentByClass<UInv_ItemComponent>();
+	UE_LOG(LogTemp, Warning, TEXT("[Pickup][Server] ItemActor=%s ItemComp=%s"),
+		*GetNameSafe(ItemActor), *GetNameSafe(ItemComp));
+	if (!ItemComp) return;
+
+	UInv_InventoryComponent* Inv = nullptr;
+
+	// 先找基类
+	Inv = FindComponentByClass<UInv_InventoryComponent>();
+
+	// 如果找不到，尝试从所有组件里找“名字包含 InventoryComponent 的”（临时兜底排查用）
+	if (!Inv)
+	{
+		GetComponents(Comps);
+		for (UActorComponent* C : Comps)
+		{
+			if (C && C->GetName().Contains(TEXT("Inventory")))
+			{
+				Inv = Cast<UInv_InventoryComponent>(C);
+				if (Inv) break;
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[Pickup][Server] PCInv=%s"), *GetNameSafe(Inv));
+	if (!Inv) return;
+
+	// 服务器权威加入背包
+	Inv->TryAddItem(ItemComp);
+
+	// 服务器销毁地上物品
+	ItemActor->Destroy();
+}
+
+void AMSG_PlayerController::HideStartupUI_Local()
+{
+	if (!IsLocalController()) return;
+
+	if (StartupWidget)
+	{
+		StartupWidget->RemoveFromParent();
+	}
 }
 
 void AMSG_PlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (!IsLocalController()) return;
 
 	// 只有在大厅模式才根据鼠标位置旋转视角
 	if (bEnableHallMode)
@@ -64,11 +190,16 @@ void AMSG_PlayerController::Tick(float DeltaTime)
 
 void AMSG_PlayerController::SetHallControlMode(bool bEnable)
 {
+	// 只允许本地控制器改输入模式，否则会出现“一端能动一端不能动/输入串台”
+	if (!IsLocalController())
+	{
+		return;
+	}
+
 	bEnableHallMode = bEnable;
 
 	if (bEnableHallMode)
 	{
-		// —— 大厅：UIOnly + 显示鼠标 ——
 		bShowMouseCursor = true;
 
 		FInputModeUIOnly InputMode;
@@ -77,14 +208,12 @@ void AMSG_PlayerController::SetHallControlMode(bool bEnable)
 	}
 	else
 	{
-		// —— 战斗：GameOnly + 隐藏鼠标 ——
 		bShowMouseCursor = false;
 
 		FInputModeGameOnly InputMode;
 		SetInputMode(InputMode);
 	}
 
-	// 确保没有被别的地方关掉输入
 	SetIgnoreLookInput(false);
 	SetIgnoreMoveInput(false);
 
@@ -109,57 +238,33 @@ void AMSG_PlayerController::ToggleInventory()
 // =========================
 
 void AMSG_PlayerController::Client_ApplyHallMode_Implementation(
-	TSubclassOf<APawn> InPawnClass,
+	APawn* InPawn,
 	TSubclassOf<AHUD> InHUDClass)
 {
-	// 切 HUD
+	// 只做“客户端表现层”的事：HUD / 输入模式 / 镜头
 	if (InHUDClass)
 	{
 		ClientSetHUD(InHUDClass);
 	}
 
-	// 干掉旧 Pawn
-	if (APawn* CurrentPawn = GetPawn())
+	ShowStartupUI_Local();
+
+	// Possess 由服务器完成；客户端这边只跟随服务器同步的 Pawn
+	APawn* TargetPawn = InPawn;
+	if (!IsValid(TargetPawn))
 	{
-		CurrentPawn->Destroy();
+		TargetPawn = Cast<APawn>(GetPawn());
 	}
 
-	// 找大厅出生点（等价于 FindPlayerStart 的 tag 行为）
-	AActor* HallStartActor = nullptr;
-	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	if (!IsValid(TargetPawn))
 	{
-		if (It->PlayerStartTag == TEXT("HallStart"))
-		{
-			HallStartActor = *It;
-			break;
-		}
+		UE_LOG(LogTemp, Warning, TEXT("Client_ApplyHallMode: TargetPawn invalid (waiting for replication)."));
+		// 不强行 Spawn，避免联机错乱；等服务器把 Pawn 同步过来即可
+		return;
 	}
 
-	const FTransform SpawnTM = HallStartActor
-		? HallStartActor->GetActorTransform()
-		: FTransform::Identity;
-
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride =
-		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	// 生成大厅 Pawn（用 BP_HallPawn）
-	APawn* NewPawn = GetWorld()->SpawnActor<APawn>(
-		InPawnClass,
-		SpawnTM.GetLocation(),
-		SpawnTM.GetRotation().Rotator(),
-		Params
-	);
-
-	if (NewPawn)
-	{
-		Possess(NewPawn);
-
-		// ⭐ 必须放这里：视角绑定完成后切换输入模式
-		SetHallControlMode(true);   // 大厅模式：UIOnly + 鼠标边缘旋转
-
-		SetViewTargetWithBlend(NewPawn, 0.5f);
-	}
+	SetHallControlMode(true);   // 大厅模式：UIOnly + 鼠标边缘旋转
+	SetViewTargetWithBlend(TargetPawn, 0.5f);
 }
 
 // =========================
@@ -167,70 +272,32 @@ void AMSG_PlayerController::Client_ApplyHallMode_Implementation(
 // =========================
 
 void AMSG_PlayerController::Client_ApplyFightMode_Implementation(
-	TSubclassOf<APawn> InPawnClass,
+	APawn* InPawn,
 	TSubclassOf<AHUD> InHUDClass)
 {
-	// 切 HUD
+	// 只做“客户端表现层”的事：HUD / 输入模式 / 镜头
 	if (InHUDClass)
 	{
 		ClientSetHUD(InHUDClass);
 	}
 
-	// 这里只用“场景中已有的 BP_Player”
-	APawn* ExistPawn = nullptr;
+	HideStartupUI_Local();
 
-	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	// Possess 由服务器完成；客户端这边只跟随服务器同步的 Pawn
+	APawn* TargetPawn = InPawn;
+	if (!IsValid(TargetPawn))
 	{
-		APawn* IterPawn = *It;
-		if (IterPawn && InPawnClass && IterPawn->IsA(InPawnClass))
-		{
-			ExistPawn = IterPawn;
-			break;
-		}
+		TargetPawn = Cast<APawn>(GetPawn());
 	}
 
-	if (!ExistPawn)
+	if (!IsValid(TargetPawn))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Client_ApplyFightMode: No BP_Player found in level, spawning one."));
-
-		// 如果没找到，就直接在原地 Spawn 一个，避免彻底黑屏
-		FTransform SpawnTM = FTransform::Identity;
-		if (APawn* Old = GetPawn())
-		{
-			SpawnTM.SetLocation(Old->GetActorLocation());
-			SpawnTM.SetRotation(Old->GetActorQuat());
-		}
-
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride =
-			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-		ExistPawn = GetWorld()->SpawnActor<APawn>(
-			InPawnClass,
-			SpawnTM.GetLocation(),
-			SpawnTM.GetRotation().Rotator(),
-			Params
-		);
+		UE_LOG(LogTemp, Warning, TEXT("Client_ApplyFightMode: TargetPawn invalid (waiting for replication)."));
+		return;
 	}
 
-	if (ExistPawn)
-	{
-		// 先把旧 Pawn（比如 HallPawn）干掉
-		if (APawn* CurrentPawn = GetPawn())
-		{
-			if (CurrentPawn != ExistPawn)
-			{
-				CurrentPawn->Destroy();
-			}
-		}
-
-		Possess(ExistPawn);
-
-		// ⭐ 放这里：Possess完后切换到战斗控制模式
-		SetHallControlMode(false);      // 战斗模式：GameOnly
-
-		SetViewTargetWithBlend(ExistPawn, 0.5f);
-	}
+	SetHallControlMode(false);      // 战斗模式：GameOnly
+	SetViewTargetWithBlend(TargetPawn, 0.5f);
 }
 
 void AMSG_PlayerController::HotReloadLua()
@@ -258,8 +325,29 @@ void AMSG_PlayerController::HotReloadLua()
 	UE_LOG(LogTemp, Warning, TEXT("[HotReloadLua] done, envCount=%d"), EnvCount);
 }
 
+void AMSG_PlayerController::Server_StartGameTravel_Implementation(FName MapName)
+{
+	if (!HasAuthority()) return;
+
+	// 需要全体切世界的地图：ServerTravel
+	if (MapName == FName("TestMap"))
+	{
+		const FString URL = MapName.ToString();
+		GetWorld()->ServerTravel(URL, false);
+		return;
+	}
+
+	// 流加载子关卡：只让服务器触发加载
+	// ⚠️ 不要在这里立刻 SwitchWorldMode，因为流加载通常是异步的：
+	// 应该在 GameMode 蓝图里“流加载完成 / 显示完成”后再调用 SwitchWorldMode(MapName)
+	if (AMyShootingGameModeBase* GM = GetWorld()->GetAuthGameMode<AMyShootingGameModeBase>())
+	{
+		GM->BP_LoadSubLevel(MapName);
+	}
+}
+
 // =========================
-// 你的原有鼠标边缘旋转逻辑
+// 鼠标边缘旋转逻辑
 // =========================
 
 EScreenRotationDirection AMSG_PlayerController::ScreenRotationDirection()

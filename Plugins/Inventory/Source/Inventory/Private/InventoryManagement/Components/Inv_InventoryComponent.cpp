@@ -154,6 +154,16 @@ void UInv_InventoryComponent::AddReplicatedSubObject(UObject* SubObject)
 
 bool UInv_InventoryComponent::TryAddItem(UInv_ItemComponent* ItemComp)
 {
+	if (!ItemComp) return false;
+
+	// 服务器/无UI时：不要访问 InventoryMenu
+	if (!InventoryMenu)
+	{
+		// 直接走“新增物品”服务器流程（不做容量判定）
+		Server_AddNewItem(ItemComp, 0);
+		return true;
+	}
+
 	FInv_SlotAvailabilityResult Result = InventoryMenu->HasRoomForItem(ItemComp);
 
 	UInv_InventoryItem* FoundItem = InventoryList.FindFirstItemByTag(ItemComp->GetItemManifest().GetItemType());

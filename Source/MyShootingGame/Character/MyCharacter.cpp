@@ -1,7 +1,9 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "MyShootingGame/Character/MyCharacter.h"
+#include "Net/UnrealNetwork.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "../../../../../../../Source/Runtime/Engine/Classes/Components/CapsuleComponent.h"
 #include "PlayerCharacter.h"
 #include "../Logic/MSG_EventManager.h"
@@ -14,9 +16,9 @@
 // Sets default values
 AMyCharacter::AMyCharacter()
 {
- 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-	
+
 }
 
 // Called when the game starts or when spawned
@@ -36,39 +38,61 @@ void AMyCharacter::Tick(float DeltaTime)
 void AMyCharacter::Initilize()
 {
 	CurrentHealth = MaxHealth;
+
+	LastRepHealth = CurrentHealth;
+	bDeathHandled = false;
+	bDead = false;
+	SetCanBeDamaged(true);
 }
 
 float AMyCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	const float Actual = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	UE_LOG(LogTemp, Warning, TEXT("TakeDamage; %.1f FRom: %s"), DamageAmount, *GetNameSafe(DamageCauser));
+	// 服务器权威：客户端不在这里结算血量/死亡
+	if (!HasAuthority())
+	{
+		return Actual;
+	}
 
-	SetCurrentHealth(CurrentHealth - DamageAmount);
+	// 死亡/不可受伤后直接忽略
+	if (bDead || !CanBeDamaged())
+	{
+		return 0.f;
+	}
 
+	const float OldHealth = CurrentHealth;
+	SetCurrentHealth(CurrentHealth - Actual);
 
-	if (CurrentHealth <= 0)
+	// 判死（服务器权威）
+	if (CurrentHealth <= 0.f && !bDead)
 	{
 		bDead = true;
-		UE_LOG(LogTemp, Warning, TEXT("Character died!"));
-		Ragdoll();
+		OnRep_Dead(); // 服务器自己也要执行一次表现/收口
 	}
-	return DamageAmount;
+
+	return Actual;
 }
 
 void AMyCharacter::SetCurrentHealth(float NewHealth)
 {
 	CurrentHealth = FMath::Clamp(NewHealth, 0.f, MaxHealth);
+
+	// 服务器端维护缓存；客户端由 OnRep 维护
+	if (HasAuthority())
+	{
+		LastRepHealth = CurrentHealth;
+	}
 }
 
 void AMyCharacter::Ragdoll()
 {
-	//�ر���ײ
+	//رײ
 	if (GetCapsuleComponent())
 	{
 		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
-	if(GetMesh())
+	if (GetMesh())
 	{
 		GetMesh()->SetCollisionObjectType(ECC_PhysicsBody);
 		GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -77,14 +101,14 @@ void AMyCharacter::Ragdoll()
 		GetMesh()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
 
 
-		//��������ģ��
-		GetMesh()->SetAllBodiesBelowSimulatePhysics("pelvis",true);
+		//ģ
+		GetMesh()->SetAllBodiesBelowSimulatePhysics("pelvis", true);
 		GetMesh()->SetSimulatePhysics(true);
 		GetMesh()->WakeAllRigidBodies();
 		GetMesh()->bBlendPhysics = true;
 
 
-		
+
 	}
 }
 
@@ -98,7 +122,7 @@ void AMyCharacter::PlayRandomMontageFromArray(const TArray<UAnimMontage*>& Monta
 	do
 	{
 		RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, MontageArray.Num() - 1);
-	} while (RandomIndex == LastIndex && MontageArray.Num() > 1); // ��������ѭ��
+	} while (RandomIndex == LastIndex && MontageArray.Num() > 1); // ѭ
 
 	LastIndex = RandomIndex;
 
@@ -110,7 +134,10 @@ void AMyCharacter::PlayRandomMontageFromArray(const TArray<UAnimMontage*>& Monta
 
 void AMyCharacter::MeleeAttackCollision(AController* EventInstigator)
 {
-	FVector SpherePos = GetActorLocation() + GetActorForwardVector()*100.f;
+	if (!HasAuthority()) return;
+	if (bDead) return;
+
+	FVector SpherePos = GetActorLocation() + GetActorForwardVector() * 100.f;
 	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
 	TArray<AActor*> IgnoreActors;
@@ -128,12 +155,90 @@ void AMyCharacter::MeleeAttackCollision(AController* EventInstigator)
 		OutActors
 	);
 
-	for(AActor* Actor : OutActors)
+	for (AActor* Actor : OutActors)
 	{
-		if(AMyCharacter* AttackTarget = Cast<AMyCharacter>(Actor))
+		if (AMyCharacter* AttackTarget = Cast<AMyCharacter>(Actor))
 		{
-			AttackTarget->TakeDamage(MeleeDamage, FDamageEvent(), EventInstigator, this);
+			if (AttackTarget->IsDead()) { continue; }
+			UGameplayStatics::ApplyDamage(AttackTarget, MeleeDamage, EventInstigator, this, UDamageType::StaticClass());
+			//(MeleeDamage, FDamageEvent(), EventInstigator, this);
 		}
 	}
 }
 
+
+
+void AMyCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMyCharacter, bDead);
+	DOREPLIFETIME(AMyCharacter, CurrentHealth);
+}
+
+
+
+
+void AMyCharacter::OnTookDamage(float DamageAmount, AActor* DamageCauser)
+{
+	// Base: no-op
+}
+
+void AMyCharacter::OnDied()
+{
+	// Base: no-op
+}
+
+
+void AMyCharacter::OnRep_CurrentHealth()
+{
+	if (bDead)
+	{
+		LastRepHealth = CurrentHealth;
+		return;
+	}
+
+	if (CurrentHealth < LastRepHealth)
+	{
+		const float Damage = LastRepHealth - CurrentHealth;
+		OnTookDamage(Damage, nullptr);
+	}
+
+	LastRepHealth = CurrentHealth;
+}
+
+void AMyCharacter::OnRep_Dead()
+{
+	if (!bDead) return;
+	if (bDeathHandled) return;
+	bDeathHandled = true;
+
+	SetCanBeDamaged(false);
+
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->DisableMovement();
+	}
+
+	if (UCapsuleComponent* Cap = GetCapsuleComponent())
+	{
+		Cap->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	OnDied();
+}
+
+void AMyCharacter::BP_MeleeAttackCollision()
+{
+	AController* Inst = GetController();
+	if (HasAuthority())
+	{
+		MeleeAttackCollision(Inst);
+		return;
+	}
+	Server_MeleeAttackCollision(Inst);
+}
+
+void AMyCharacter::Server_MeleeAttackCollision_Implementation(AController* EventInstigator)
+{
+	MeleeAttackCollision(EventInstigator);
+}

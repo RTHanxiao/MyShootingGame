@@ -1,14 +1,9 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "MyShootingGameModeBase.generated.h"
 
-/**
- *
- */
 UCLASS()
 class MYSHOOTINGGAME_API AMyShootingGameModeBase : public AGameModeBase
 {
@@ -18,9 +13,23 @@ public:
 	AMyShootingGameModeBase();
 
 	virtual void BeginPlay() override;
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+
+	// 服务器侧（GameMode 蓝图里实现）：流加载子关卡
+	UFUNCTION(BlueprintImplementableEvent, Category = "World")
+	void BP_LoadSubLevel(FName LevelName);
+
+	// 服务器侧（由蓝图在“流加载完成”时回调），统一切模式
+	UFUNCTION(BlueprintCallable, Category = "MSG|WorldSwitch")
+	void SwitchWorldMode(FName LoadedLevelName);
+
+	/** 切换成大厅模式（对所有玩家） */
+	void SetHallMode();
+
+	/** 切换成战斗模式（对所有玩家） */
+	void SetFightMode();
 
 protected:
-
 	// ==== 预加载的两种模式 ==== //
 
 	UPROPERTY(EditAnywhere, Category = "MSG|Hall")
@@ -41,15 +50,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "MSG|Fight")
 	TSubclassOf<class AHUD> FightHUDClass;
 
-public:
+	// 新玩家加入时，对该玩家补齐当前模式（避免第二个客户端没 UI）
+	void ApplyModeForPlayer(APlayerController* PC);
+	void SetHallModeForPlayer(APlayerController* PC);
+	void SetFightModeForPlayer(APlayerController* PC);
 
-	/** 蓝图可调用：根据当前世界切换模式（大厅 / 战斗） */
-	UFUNCTION(BlueprintCallable, Category = "MSG|WorldSwitch")
-	void SwitchWorldMode(FName LoadedLevelName);
+	enum class EMSGWorldMode : uint8
+	{
+		Hall,
+		Fight
+	};
 
-	/** 切换成大厅模式 */
-	void SetHallMode();
+	EMSGWorldMode CurrentWorldMode = EMSGWorldMode::Hall;
 
-	/** 切换成战斗模式 */
-	void SetFightMode();
+	void ApplyModeForPlayer_Delayed(APlayerController* PC);
 };

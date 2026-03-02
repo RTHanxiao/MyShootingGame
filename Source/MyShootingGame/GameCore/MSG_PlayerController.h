@@ -1,16 +1,15 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "EquipmentManagement/Components/Inv_EquipmentComponent.h"
+#include "InventoryManagement/Components/Inv_InventoryComponent.h"
 #include "MSG_PlayerController.generated.h"
 
 class UInputMappingContext;
-class UInv_InventoryComponent;
 
-/** ÆÁÄ»°Ë·½Ïò£¬ÓÃÓÚ´óÌüÊÓ½ÇĞı×ª */
 UENUM(BlueprintType)
 enum class EScreenRotationDirection : uint8
 {
@@ -27,9 +26,9 @@ enum class EScreenRotationDirection : uint8
 };
 
 /**
- * Í³Ò»µÄÍæ¼Ò¿ØÖÆÆ÷£º
- * - ´óÌüÄ£Ê½£ºÏÔÊ¾Êó±ê£¬UIOnly ÊäÈë£¬Êó±êÅ²µ½ÆÁÄ»±ßÔµÊ±Ğı×ªÊÓ½Ç
- * - Õ½¶·Ä£Ê½£ºÓÎÏ·ÊäÈëÎªÖ÷£¨¿ÉÔÚÀ¶Í¼/×ÓÀàÀï¼ÌĞøÀ©Õ¹£©
+ * Í³Ò»Ò¿
+ * - Ä£Ê½Ê¾ê£¬UIOnly ë£¬Å²Ä»ÔµÊ±×ªÓ½
+ * - Õ½Ä£Ê½Ï·ÎªÍ¼/Õ¹
  */
 UCLASS()
 class MYSHOOTINGGAME_API AMSG_PlayerController : public APlayerController
@@ -45,44 +44,74 @@ public:
 	UFUNCTION(BlueprintCallable)
 	UInv_EquipmentComponent* GetEquipmentComponent() { return FindComponentByClass<UInv_EquipmentComponent>(); }
 
-	/** ÔÚ C++ »òÀ¶Í¼ÀïÇĞ»»ÊÇ·ñÊ¹ÓÃ¡°´óÌü¿ØÖÆÄ£Ê½¡± */
 	UFUNCTION(BlueprintCallable, Category = "MSG|Mode")
 	void SetHallControlMode(bool bEnableHallMode);
 
-	// Õ½¶·ÓÃ MappingContext£¨ÔÚ BP ÖĞÖ¸¶¨£©
+	UPROPERTY(EditAnywhere, Category = "MSG|UI")
+	TSubclassOf<UUserWidget> StartupWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> StartupWidget;
+
+	UFUNCTION(Client, Reliable)
+	void Client_ShowStartupUI();
+
+	void ShowStartupUI_Local();
+	void HideStartupUI_Local();
+
+	// MappingContext BP Ö¸
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MSG|Input")
 	UInputMappingContext* FightMappingContext;
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void ToggleInventory();
 
-	TWeakObjectPtr<UInv_InventoryComponent> GetInventoryComponent() const { return InventoryComponent; }
+	TWeakObjectPtr<UInv_InventoryComponent>GetInventoryComponent() const
+	{
+		// å¦‚æœå·²æœ‰ç¼“å­˜ä¸”æœ‰æ•ˆï¼Œç›´æ¥è¿”å›
+		if (InventoryComponent.IsValid())
+		{
+			return InventoryComponent;
+		}
+
+		// å¦åˆ™ä»è‡ªèº«ç»„ä»¶é‡Œæ‰¾ï¼ˆPCè“å›¾æŒ‚è½½ï¼‰
+		UInv_InventoryComponent* Found = FindComponentByClass<UInv_InventoryComponent>();
+		return Found;
+	}
 
 	// =========================
-	// Client Ö´ĞĞ£º´óÌü/Õ½¶·ÇĞ»»
+	// Client 
 	// =========================
 
 	UFUNCTION(Client, Reliable)
-	void Client_ApplyHallMode(TSubclassOf<APawn> InPawnClass, TSubclassOf<AHUD> InHUDClass);
+	void Client_ApplyHallMode(APawn* InPawn, TSubclassOf<AHUD> InHUDClass);
 
 	UFUNCTION(Client, Reliable)
-	void Client_ApplyFightMode(TSubclassOf<APawn> InPawnClass, TSubclassOf<AHUD> InHUDClass);
+	void Client_ApplyFightMode(APawn* InPawn, TSubclassOf<AHUD> InHUDClass);
 
 	UFUNCTION(Exec)
 	void HotReloadLua();
 
+	UFUNCTION(Server, Reliable)
+	void Server_StartGameTravel(FName MapName);
+
+	UFUNCTION(Server, Reliable)
+	void Server_TryAddItem(UInv_ItemComponent* ItemComp);
+
+	UFUNCTION(Server, Reliable)
+	void Server_TryPickupActor(AActor* ItemActor);
+
 protected:
-	/** ÊÇ·ñÆôÓÃ´óÌüÄ£Ê½£¨Êó±ê±ßÔµĞı×ªÊÓ½Ç + UI Only ÊäÈë£© */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MSG|Hall")
 	bool bEnableHallMode;
 
-	/** ¹â±êÎ»ÖÃãĞÖµ£¨Ô½Ğ¡Ô½Ãô¸Ğ£© */
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MSG|Hall", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float CursorThreshold;
 
 	EScreenRotationDirection ScreenRotationDirection();
 	bool RotateView(EScreenRotationDirection Dir, const float& Speed = 0.1f);
 
-	// ±³°üÖ¸Õë
 	TWeakObjectPtr<UInv_InventoryComponent> InventoryComponent;
 };

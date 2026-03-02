@@ -11,6 +11,8 @@
 #include "Hall/HallHUD.h"
 #include "Hall/HallPlayerController.h"
 #include "Hall/HallPawn.h"
+#include "GameFramework/PlayerStart.h"
+#include "Misc/PackageName.h"
 
 AMyShootingGameModeBase::AMyShootingGameModeBase()
 {
@@ -23,7 +25,8 @@ AMyShootingGameModeBase::AMyShootingGameModeBase()
 	// Pawn 类走 TSubclassOf，在 BP_GameMode 里配置：
 	// HallPawnClass = BP_HallPawn
 	// FightPawnClass = BP_Player
-	DefaultPawnClass = HallPawnClass;
+	bStartPlayersAsSpectators = true;
+	DefaultPawnClass = nullptr;
 
 	HallHUDClass = AHallHUD::StaticClass();
 	FightHUDClass = AMSG_FightHUD::StaticClass();
@@ -34,7 +37,6 @@ void AMyShootingGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// GameMode 只在 Server 有意义；Client 下不做模式决策
 	if (!HasAuthority())
 	{
 		return;
@@ -42,44 +44,136 @@ void AMyShootingGameModeBase::BeginPlay()
 
 	FString CurrentMap = UGameplayStatics::GetCurrentLevelName(GetWorld(), true);
 
-	// 默认为 Hall；若是测试图(TestMap)则直接转换成 FightMode
+	// 记录当前模式（以后新玩家进来就用这个，不靠 MapName 推断）
 	if (CurrentMap == "TestMap")
 	{
+		CurrentWorldMode = EMSGWorldMode::Fight;
 		SetFightMode();
 	}
 	else
 	{
+		CurrentWorldMode = EMSGWorldMode::Hall;
 		SetHallMode();
 	}
 }
 
+void AMyShootingGameModeBase::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+
+	if (!HasAuthority() || !NewPlayer) return;
+
+	// 关键：延迟一下，避免新加入客户端 PC/HUD 未 ready 导致 Client RPC 不生效
+	ApplyModeForPlayer_Delayed(NewPlayer);
+}
+
+void AMyShootingGameModeBase::ApplyModeForPlayer_Delayed(APlayerController* PC)
+{
+	if (!HasAuthority() || !PC) return;
+
+	FTimerHandle TH;
+	GetWorldTimerManager().SetTimer(
+		TH,
+		FTimerDelegate::CreateUObject(this, &AMyShootingGameModeBase::ApplyModeForPlayer, PC),
+		0.2f,
+		false
+	);
+}
+
 void AMyShootingGameModeBase::SetHallMode()
 {
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	if (!PC) return;
+	if (!HasAuthority() || !HallPawnClass) return;
 
-	// 由 Server 决策，并通过 Client RPC 让客户端执行（HUD/Input/视角）逻辑
-	if (AMSG_PlayerController* MSGPC = Cast<AMSG_PlayerController>(PC))
+	// 找大厅出生点（PlayerStartTag == HallStart）
+	AActor* HallStartActor = nullptr;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
 	{
-		MSGPC->Client_ApplyHallMode(HallPawnClass, HallHUDClass);
+		if (It->PlayerStartTag == TEXT("HallStart"))
+		{
+			HallStartActor = *It;
+			break;
+		}
+	}
+	const FTransform SpawnTM = HallStartActor ? HallStartActor->GetActorTransform() : FTransform::Identity;
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		if (!PC) continue;
+
+		// 干掉旧 Pawn（例如 FightPawn）
+		if (APawn* OldPawn = PC->GetPawn())
+		{
+			OldPawn->Destroy();
+		}
+
+		FActorSpawnParameters Params;
+		Params.Owner = PC;
+		Params.Instigator = PC->GetPawnOrSpectator();
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		APawn* NewPawn = GetWorld()->SpawnActor<APawn>(
+			HallPawnClass,
+			SpawnTM.GetLocation(),
+			SpawnTM.GetRotation().Rotator(),
+			Params
+		);
+		if (!NewPawn) continue;
+
+		PC->Possess(NewPawn);
+
+		if (AMSG_PlayerController* MSGPC = Cast<AMSG_PlayerController>(PC))
+		{
+			MSGPC->Client_ApplyHallMode(NewPawn, HallHUDClass);
+		}
 	}
 }
 
 void AMyShootingGameModeBase::SetFightMode()
 {
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	if (!PC) return;
+	if (!HasAuthority() || !FightPawnClass) return;
 
-	if (AMSG_PlayerController* MSGPC = Cast<AMSG_PlayerController>(PC))
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
-		MSGPC->Client_ApplyFightMode(FightPawnClass, FightHUDClass);
+		APlayerController* PC = It->Get();
+		if (!PC) continue;
+
+		// 干掉旧 Pawn（例如 HallPawn）
+		if (APawn* OldPawn = PC->GetPawn())
+		{
+			OldPawn->Destroy();
+		}
+
+		AActor* StartSpot = FindPlayerStart(PC);
+		const FTransform SpawnTM = StartSpot ? StartSpot->GetActorTransform() : FTransform::Identity;
+
+		FActorSpawnParameters Params;
+		Params.Owner = PC;
+		Params.Instigator = PC->GetPawnOrSpectator();
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		APawn* NewPawn = GetWorld()->SpawnActor<APawn>(
+			FightPawnClass,
+			SpawnTM.GetLocation(),
+			SpawnTM.GetRotation().Rotator(),
+			Params
+		);
+		if (!NewPawn) continue;
+
+		PC->Possess(NewPawn);
+
+		if (AMSG_PlayerController* MSGPC = Cast<AMSG_PlayerController>(PC))
+		{
+			MSGPC->Client_ApplyFightMode(NewPawn, FightHUDClass);
+		}
 	}
 }
 
 /** 蓝图调用：根据地图选择模式 */
 void AMyShootingGameModeBase::SwitchWorldMode(FName LoadedLevelName)
 {
-	// 保持你原逻辑（注意：依然由 Server 调用更合理）
 	if (!HasAuthority())
 	{
 		return;
@@ -87,14 +181,112 @@ void AMyShootingGameModeBase::SwitchWorldMode(FName LoadedLevelName)
 
 	if (LoadedLevelName == "Demonstration")
 	{
+		CurrentWorldMode = EMSGWorldMode::Hall;
 		SetHallMode();
 	}
 	else if (LoadedLevelName == "Highway")
 	{
+		CurrentWorldMode = EMSGWorldMode::Fight;
 		SetFightMode();
 	}
 	else
 	{
+		CurrentWorldMode = EMSGWorldMode::Hall;
 		SetHallMode();
+	}
+}
+
+
+void AMyShootingGameModeBase::ApplyModeForPlayer(APlayerController* PC)
+{
+	if (!HasAuthority() || !PC) return;
+
+	if (CurrentWorldMode == EMSGWorldMode::Fight)
+	{
+		SetFightModeForPlayer(PC);
+	}
+	else
+	{
+		SetHallModeForPlayer(PC);
+	}
+}
+
+void AMyShootingGameModeBase::SetHallModeForPlayer(APlayerController* PC)
+{
+	if (!HasAuthority() || !PC || !HallPawnClass) return;
+
+	APawn* Pawn = PC->GetPawn();
+
+	// ✅ PostLogin 场景：如果已经有 Pawn，不要 Destroy/重生（避免误伤 server0）
+	if (!Pawn)
+	{
+		// 找大厅出生点（PlayerStartTag == HallStart）
+		AActor* HallStartActor = nullptr;
+		for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+		{
+			if (It->PlayerStartTag == TEXT("HallStart"))
+			{
+				HallStartActor = *It;
+				break;
+			}
+		}
+		const FTransform SpawnTM = HallStartActor ? HallStartActor->GetActorTransform() : FTransform::Identity;
+
+		FActorSpawnParameters Params;
+		Params.Owner = PC;
+		Params.Instigator = PC->GetPawnOrSpectator();
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		Pawn = GetWorld()->SpawnActor<APawn>(
+			HallPawnClass,
+			SpawnTM.GetLocation(),
+			SpawnTM.GetRotation().Rotator(),
+			Params
+		);
+
+		if (!Pawn) return;
+		PC->Possess(Pawn);
+	}
+
+	// ✅ 无论是否重生，都只做客户端表现
+	if (AMSG_PlayerController* MSGPC = Cast<AMSG_PlayerController>(PC))
+	{
+		MSGPC->Client_ApplyHallMode(Pawn, HallHUDClass);
+	}
+}
+
+void AMyShootingGameModeBase::SetFightModeForPlayer(APlayerController* PC)
+{
+	if (!HasAuthority() || !PC || !FightPawnClass) return;
+
+	APawn* Pawn = PC->GetPawn();
+
+	// ✅ PostLogin 场景：如果已经有 Pawn，不要 Destroy/重生（避免误伤 server0）
+	if (!Pawn)
+	{
+		AActor* StartSpot = FindPlayerStart(PC);
+		const FTransform SpawnTM = StartSpot ? StartSpot->GetActorTransform() : FTransform::Identity;
+
+		FActorSpawnParameters Params;
+		Params.Owner = PC;
+		Params.Instigator = PC->GetPawnOrSpectator();
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		Pawn = GetWorld()->SpawnActor<APawn>(
+			FightPawnClass,
+			SpawnTM.GetLocation(),
+			SpawnTM.GetRotation().Rotator(),
+			Params
+		);
+
+		if (!Pawn) return;
+		PC->Possess(Pawn);
+	}
+
+	if (AMSG_PlayerController* MSGPC = Cast<AMSG_PlayerController>(PC))
+	{
+		MSGPC->Client_ApplyFightMode(Pawn, FightHUDClass);
 	}
 }

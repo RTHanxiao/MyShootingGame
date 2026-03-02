@@ -1,4 +1,4 @@
- // Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -19,26 +19,36 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	
-
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	//Actor»ù´¡½üÕ½ÉËº¦
-	UPROPERTY(EditAnywhere,BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	float MeleeDamage = 20.f;
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Dead)
 	bool bDead = false;
-	
+
 	UPROPERTY(BlueprintReadOnly)
 	float MaxHealth = 100.f;
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentHealth)
 	float CurrentHealth = 100.f;
 
-	//¼õÉË±¶ÂÊ
+	UFUNCTION()
+	void OnRep_Dead();
+
+	UFUNCTION()
+	void OnRep_CurrentHealth();
+
+	// RepNotify è¾…åŠ©ï¼šç”¨äºåˆ¤æ–­æ‰è¡€å¹…åº¦ï¼ˆä¸éœ€è¦å¤åˆ¶ï¼‰
+	UPROPERTY()
+	float LastRepHealth = 100.f;
+
+	// é˜²æ­¢æ­»äº¡è¡¨ç°é‡å¤æ‰§è¡Œï¼ˆä¸éœ€è¦å¤åˆ¶ï¼‰
+	UPROPERTY()
+	bool bDeathHandled = false;
+
 	UPROPERTY(BlueprintReadOnly)
 	float DamageReductionFactor = 1.f;
 
@@ -54,7 +64,7 @@ public:
 		return MaxHealth;
 	}
 
-	UFUNCTION(BlueprintCallable)	
+	UFUNCTION(BlueprintCallable)
 	float GetCurrentHealth() const
 	{
 		return CurrentHealth;
@@ -62,27 +72,32 @@ public:
 
 	void Initilize();
 
-	//ÖØĞ´ÊÜÉËº¯Êı
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
-	//ÉèÖÃµ±Ç°ÑªÁ¿
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	void SetCurrentHealth(float NewHealth);
 
-	//ËÀÍö²¼ÍŞÍŞ
 	void Ragdoll();
 
 	bool IsDead() const { return bDead; }
 
 	virtual void PlayRandomMontageFromArray(const TArray<UAnimMontage*>& MontageArray);
 
-	//½üÕ½¹¥»÷
+	// Cosmetic hooks (called on clients via RepNotify)
+	virtual void OnTookDamage(float DamageAmount, AActor* DamageCauser);
+	virtual void OnDied();
+	UFUNCTION(BlueprintCallable, Category = "Combat|Melee")
+	void BP_MeleeAttackCollision();
+
+	UFUNCTION(Server, Reliable)
+	void Server_MeleeAttackCollision(AController* EventInstigator);
+
 	UFUNCTION(BlueprintCallable)
 	virtual void MeleeAttackCollision(AController* EventInstigator);
 
-	//¿É¹¥»÷¶ÔÏó
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<AMyCharacter> AttackableTargetClass;
 
-	//ÉÏÒ»¸ö²¥·ÅµÄ¹¥»÷¶¯»­
 	int32 LastIndex;
 };

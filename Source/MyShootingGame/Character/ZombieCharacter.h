@@ -11,7 +11,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FZombieAttackEnded);
 class APlayerCharacter;
 class AZombieAIController;
 /**
- * 
+ *
  */
 UCLASS()
 class MYSHOOTINGGAME_API AZombieCharacter : public AMyCharacter
@@ -23,7 +23,7 @@ class MYSHOOTINGGAME_API AZombieCharacter : public AMyCharacter
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
-	
+
 
 public:
 	AZombieCharacter();

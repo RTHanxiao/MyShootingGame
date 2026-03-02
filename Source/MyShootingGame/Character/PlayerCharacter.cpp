@@ -16,6 +16,7 @@
 #include "../GameCore/MSG_PlayerController.h"
 
 #include "EquipmentManagement/Components/Inv_EquipmentComponent.h"
+#include "EquipmentManagement/Actors/Inv_EquipActor.h"
 #include "InventoryManagement/Components/Inv_InventoryComponent.h"
 
 #include "Items/Inv_InventoryItem.h"
@@ -95,6 +96,12 @@ void APlayerCharacter::BeginPlay()
 
 	// 初始同步一次（防止进场已有装备但没有触发广播）
 	RefreshActiveWeaponFromEquipment();
+
+	UE_LOG(LogTemp, Warning, TEXT("[Pawn] %s Role=%d Controller=%s Owner=%s"),
+		*GetNameSafe(this),
+		(int32)GetLocalRole(),
+		*GetNameSafe(GetController()),
+		*GetNameSafe(GetOwner()));
 }
 
 void APlayerCharacter::Tick(float DeltaTime)
@@ -339,27 +346,31 @@ void APlayerCharacter::PlayerAttack()
 	}
 
 	UInv_InventoryItem* Item = EquipComp->GetActiveWeaponItem();
-	AActor* EquipActor = EquipComp->GetActiveWeaponActor();
+	AInv_EquipActor* EquipActor = EquipComp->GetActiveWeaponActor();
 
 	UE_LOG(LogTemp, Warning, TEXT("[Attack] ActiveItem=%s  ActiveActor=%s"),
 		*GetNameSafe(Item),
 		*GetNameSafe(EquipActor));
 
-	if (!IsValid(Item) || !IsValid(EquipActor))
+	if (!IsValid(EquipActor))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[Attack] Abort: Item or EquipActor invalid"));
+		UE_LOG(LogTemp, Error, TEXT("[Attack] Abort: EquipActor invalid"));
 		return;
 	}
 
-	const FInv_ItemManifest& Manifest = Item->GetItemManifest();
-	const FInv_EquipmentFragment* EquipFrag = Manifest.GetFragmentOfType<FInv_EquipmentFragment>();
-	if (!EquipFrag)
+	// ✅ 先从 EquipActor 读类型（Actor复制更可靠）
+	FGameplayTag EquipType = EquipActor->GetEquipmentType();
+
+	// 如果 Item 有效，再用 Fragment 覆盖（可选增强，不做硬依赖）
+	if (IsValid(Item))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[Attack] No EquipmentFragment on Item"));
-		return;
+		const FInv_ItemManifest& Manifest = Item->GetItemManifest();
+		if (const FInv_EquipmentFragment* EquipFrag = Manifest.GetFragmentOfType<FInv_EquipmentFragment>())
+		{
+			EquipType = EquipFrag->GetEquipmentType();
+		}
 	}
 
-	const FGameplayTag EquipType = EquipFrag->GetEquipmentType();
 	UE_LOG(LogTemp, Warning, TEXT("[Attack] EquipmentType = %s"), *EquipType.ToString());
 
 	const FGameplayTag RifleRoot = GetRifleRootTag();
@@ -370,6 +381,7 @@ void APlayerCharacter::PlayerAttack()
 	if (EquipType.IsValid() && EquipType.MatchesTag(RifleRoot))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[Attack] → Fire()"));
+		UE_LOG(LogTemp, Warning, TEXT("[Attack] ActiveActor=%s"), *GetNameSafe(EquipComp->GetActiveWeaponActor()));
 		Fire();
 		return;
 	}
@@ -802,14 +814,14 @@ void APlayerCharacter::SwitchToSecondaryWeapon()
 
 void APlayerCharacter::Interact()
 {
+	if (!PickItem) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("[Interact] pressed. Local=%d PickItem=%s"),
+		IsLocallyControlled(), *GetNameSafe(PickItem));
+
 	if (AMSG_PlayerController* PC = Cast<AMSG_PlayerController>(GetController()))
 	{
-		if (!PickItem) return;
-
-		UInv_ItemComponent* ItemComp = PickItem->FindComponentByClass<UInv_ItemComponent>();
-		if (!ItemComp) return;
-
-		PC->GetInventoryComponent().Get()->TryAddItem(ItemComp);
+		PC->Server_TryPickupActor(PickItem);
 	}
 }
 
@@ -823,18 +835,34 @@ void APlayerCharacter::ToggleInventory()
 
 float APlayerCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+}
+
+void APlayerCharacter::OnTookDamage(float DamageAmount, AActor* DamageCauser)
+{
+	if (IsDead()) return;
 
 	PlayRandomMontageFromArray(OnHitMontages);
-	bOnHit = true;
 
-	UMSG_EventManager::GetEventManagerInstance()->PlayerInjuredDelegate.ExecuteIfBound();
+	// 只有自己需要的受击 UI/事件
+	if (IsLocallyControlled())
+	{
+		bOnHit = true;
 
-	if (GetCurrentHealth() <= 0.f)
+		if (UMSG_EventManager::GetEventManagerInstance())
+		{
+			UMSG_EventManager::GetEventManagerInstance()->PlayerInjuredDelegate.ExecuteIfBound();
+		}
+	}
+}
+
+void APlayerCharacter::OnDied()
+{
+	// 死亡镜头只对自己
+	if (IsLocallyControlled())
 	{
 		DeathCameraEvent();
 	}
-	return DamageAmount;
 }
 
 FGameplayTag APlayerCharacter::GetCurrentWeaponTypeTag() const

@@ -38,6 +38,8 @@ void AItemBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	bReplicates = true;
+
 	if (ItemCollision)
 	{
 		ItemCollision->OnComponentBeginOverlap.AddDynamic(this, &AItemBase::OnEnterInteractRange);

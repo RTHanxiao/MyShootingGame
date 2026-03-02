@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "MyShootingGame/Character/ZombieCharacter.h"
@@ -25,13 +25,13 @@ void AZombieCharacter::BeginPlay()
 
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
-		// ÃæÏòÒÆ¶¯·½Ïò
+		// Æ¶
 		Move->bOrientRotationToMovement = true;
 
-		// ×ªÏòËÙ¶È£¨Ô½´óÔ½¿ìÔ½¡°¸úÊÖ¡±£¬Ô½Ð¡Ô½ÂýÔ½Æ½»¬£©
+		// ×ªÙ¶È£Ô½Ô½Ô½Ö¡Ô½Ð¡Ô½Ô½Æ½
 		Move->RotationRate = FRotator(0.f, 360.f, 0.f);
 
-		// ·ÀÖ¹Í£ÏÂÊ±¶¶¶¯
+		// Ö¹Í£Ê±
 		Move->bUseControllerDesiredRotation = false;
 	}
 }
@@ -50,7 +50,7 @@ AZombieCharacter::AZombieCharacter()
 
 
 
-float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,AController* EventInstigator, AActor* DamageCauser)
+float AZombieCharacter::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
 	const float Actual = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
@@ -91,9 +91,9 @@ void AZombieCharacter::PossessedBy(AController* NewController)
 
 void AZombieCharacter::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	// ¹¥»÷ Montage ½áÊø»ò±»´ò¶Ï£º»ØÊÕ¹¥»÷×´Ì¬
+	//  Montage ò±»´Ï£Õ¹×´Ì¬
 	SetIsAttacking(false);
 
-	// Í¨Öª BTTask£º¹¥»÷½áÊø
+	// Í¨Öª BTTask
 	OnAttackEnded.Broadcast();
 }

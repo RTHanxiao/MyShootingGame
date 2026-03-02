@@ -1,4 +1,4 @@
-#include "EquipmentManagement/Components/Inv_EquipmentComponent.h"
+ï»¿#include "EquipmentManagement/Components/Inv_EquipmentComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Character.h"
 #include "InventoryManagement/Utils/Inv_InventoryStatic.h"
@@ -7,14 +7,51 @@
 #include "Items/Fragments/Inv_ItemFragment.h"
 #include "EquipmentManagement/Actors/Inv_EquipActor.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Net/UnrealNetwork.h"
 
 
 
+
+UInv_EquipmentComponent::UInv_EquipmentComponent()
+{
+	SetIsReplicatedByDefault(true);
+}
+
+void UInv_EquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UInv_EquipmentComponent, ActiveWeaponActor);
+	DOREPLIFETIME(UInv_EquipmentComponent, ActiveWeaponItem); 
+}
 
 void UInv_EquipmentComponent::SetOwningSkeletal(USkeletalMeshComponent* Mesh)
 {
 	OwningSkeletal = Mesh;
 }
+
+void UInv_EquipmentComponent::OnRep_ActiveWeaponActor()
+{
+	AInv_EquipActor* A = ActiveWeaponActor.Get();
+	if (!IsValid(A)) return;
+
+	// æ˜¾ç¤º
+	A->SetActorHiddenInGame(false);
+	A->SetActorEnableCollision(true);
+
+	// è®©æ—§é€»è¾‘ä¹Ÿèƒ½å·¥ä½œï¼ˆå¡«å…¥å½“å‰æ§½ï¼‰
+	FInv_EquipSlotState& SlotState = GetSlotStateMutable(ActiveSlot);
+	SlotState.Actor = A;
+
+	SetActiveSlot(ActiveSlot);
+}
+
+void UInv_EquipmentComponent::OnRep_ActiveWeapon()
+{
+	// Minimal implementation: refresh visibility/collision for current slot
+	SetActiveSlot(ActiveSlot);
+}
+
 
 void UInv_EquipmentComponent::InitializeOwner(APlayerController* PC)
 {
@@ -27,11 +64,22 @@ void UInv_EquipmentComponent::InitializeOwner(APlayerController* PC)
 
 AInv_EquipActor* UInv_EquipmentComponent::GetActiveWeaponActor() const
 {
+	// ä¼˜å…ˆä½¿ç”¨å¤åˆ¶åˆ°å®¢æˆ·ç«¯çš„ ActiveWeaponActor
+	if (IsValid(ActiveWeaponActor))
+	{
+		return ActiveWeaponActor.Get();
+	}
+
+	// å…œåº•ï¼šæœåŠ¡å™¨ä¾§æˆ–æ—§é€»è¾‘ä»å¯ä»Ž SlotState å–
 	return (ActiveSlot == EInv_EquipSlot::Primary) ? PrimarySlot.Actor.Get() : SecondarySlot.Actor.Get();
 }
 
 UInv_InventoryItem* UInv_EquipmentComponent::GetActiveWeaponItem() const
 {
+	if (IsValid(ActiveWeaponItem))
+	{
+		return ActiveWeaponItem.Get();
+	}
 	return (ActiveSlot == EInv_EquipSlot::Primary) ? PrimarySlot.Item.Get() : SecondarySlot.Item.Get();
 }
 
@@ -72,7 +120,7 @@ void UInv_EquipmentComponent::InitInventoryComponent()
 
 	if (!InventoryComp->OnItemEquip.IsAlreadyBound(this, &ThisClass::OnItemEquipped))
 	{
-		InventoryComp->OnItemEquip.AddDynamic(this,&ThisClass::OnItemEquipped);
+		InventoryComp->OnItemEquip.AddDynamic(this, &ThisClass::OnItemEquipped);
 	}
 	if (!InventoryComp->OnItemUnequip.IsAlreadyBound(this, &ThisClass::OnItemUnequipped))
 	{
@@ -85,7 +133,7 @@ void UInv_EquipmentComponent::InitPlayerController()
 	OwningPC = Cast<APlayerController>(GetOwner());
 	if (!OwningPC.IsValid()) return;
 
-	// ÒÑ¾­ÓÐ Pawn Ö±½Ó×ß³õÊ¼»¯
+	// Ñ¾ Pawn Ö±ß³Ê¼
 	if (ACharacter* OwnerChara = Cast<ACharacter>(OwningPC->GetPawn()); IsValid(OwnerChara))
 	{
 		OwningSkeletal = OwnerChara->GetMesh();
@@ -93,17 +141,17 @@ void UInv_EquipmentComponent::InitPlayerController()
 		return;
 	}
 
-	// Ã» Pawn ±ÜÃâÖØ¸´°ó¶¨
+	// Ã» Pawn Ø¸
 	if (!OwningPC->OnPossessedPawnChanged.IsAlreadyBound(this, &ThisClass::OnPossessedPawnChanged))
 	{
 		OwningPC->OnPossessedPawnChanged.AddDynamic(this, &ThisClass::OnPossessedPawnChanged);
 	}
-	
+
 }
 
 void UInv_EquipmentComponent::OnPossessedPawnChanged(APawn* OP, APawn* NP)
 {
-	// Èç¹ûÖ»ÐèÒª³õÊ¼»¯Ò»´Î,ÄÃµ½ÐÂ Pawn ºó½â°ó,·ÀÖ¹ºóÐøÖØ¸´´¥·¢
+	// Ö»ÒªÊ¼Ò»,Ãµ Pawn ,Ö¹Ø¸
 	if (OwningPC.IsValid() && OwningPC->OnPossessedPawnChanged.IsAlreadyBound(this, &ThisClass::OnPossessedPawnChanged))
 	{
 		OwningPC->OnPossessedPawnChanged.RemoveDynamic(this, &ThisClass::OnPossessedPawnChanged);
@@ -129,7 +177,7 @@ AInv_EquipActor* UInv_EquipmentComponent::SpawnEquippedActor(
 {
 	if (!EquipmentFragment || !IsValid(Item) || !IsValid(AttachMesh)) return nullptr;
 
-	// Èç¹û¸Ã²ÛÖ®Ç°ÓÐ¾ÉActor£¬ÏÈ´¦Àí£¨Destroy/Detach Äã°´ÐèÇó£©
+	// Ã²Ö®Ç°Ð¾ActorÈ´Destroy/Detach ã°´
 	FInv_EquipSlotState& SlotState = GetSlotStateMutable(Slot);
 	if (AInv_EquipActor* Old = SlotState.Actor.Get())
 	{
@@ -193,13 +241,18 @@ void UInv_EquipmentComponent::OnItemEquipped(UInv_InventoryItem* EquippedItem)
 	{
 		EquipmentFragment->OnEquip(OwningPC.Get());
 	}
-	
+
 	if (!OwningSkeletal.IsValid()) return;
 	AInv_EquipActor* SpawnEquippActor = SpawnEquippedActor(ActiveSlot, EquipmentFragment, EquippedItem, OwningSkeletal.Get());
 
 	EquippedActors.Add(SpawnEquippActor);
 	SetActiveSlot(ActiveSlot);
 
+	if (IsValid(SpawnEquippActor))
+	{
+		ActiveWeaponActor = SpawnEquippActor;
+		ActiveWeaponItem = EquippedItem;
+	}
 }
 
 void UInv_EquipmentComponent::OnItemUnequipped(UInv_InventoryItem* UnequippedItem)
@@ -215,6 +268,6 @@ void UInv_EquipmentComponent::OnItemUnequipped(UInv_InventoryItem* UnequippedIte
 	{
 		EquipmentFragment->OnUnequip(OwningPC.Get());
 	}
-	
+
 	RemoveEquippedActor(EquipmentFragment->GetEquipmentType());
 }

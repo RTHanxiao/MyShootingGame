@@ -56,16 +56,10 @@ void UUI_MapMenu::InitMapSlots()
 void UUI_MapMenu::BtnStartClicked()
 {
 	if (!CurSelecetedMap) return;
-	// TODO：开始游戏逻辑（加载地图等）
-	FName CurSelecetedMapName = CurSelecetedMap->Name;
 
-	if (CurSelecetedMapName == FName("TestMap"))
+	if (AMSG_PlayerController* PC = Cast<AMSG_PlayerController>(GetOwningPlayer()))
 	{
-		UGameplayStatics::OpenLevel(this, CurSelecetedMap->Name);
-		
-	}
-	else {
-		LoadSubLevel(CurSelecetedMapName);
+		PC->Server_StartGameTravel(CurSelecetedMap->Name);
 	}
 
 	RemoveFromParent();

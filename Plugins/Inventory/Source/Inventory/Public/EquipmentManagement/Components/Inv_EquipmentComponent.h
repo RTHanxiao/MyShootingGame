@@ -33,13 +33,14 @@ struct FInv_EquipSlotState
 	TWeakObjectPtr<AInv_EquipActor> Actor;
 };
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent),Blueprintable )
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent), Blueprintable)
 class INVENTORY_API UInv_EquipmentComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	
+	UInv_EquipmentComponent();
+
 	void SetOwningSkeletal(USkeletalMeshComponent* Mesh);
 	void SetIsPreview(bool bPreview) { bIsPreview = bPreview; }
 	void InitializeOwner(APlayerController* PC);
@@ -78,8 +79,14 @@ private:
 
 	void InitPlayerController();
 	void InitInventoryComponent();
-	AInv_EquipActor* SpawnEquippedActor(EInv_EquipSlot Slot,FInv_EquipmentFragment* EquipmentFragment,
-																	UInv_InventoryItem* ItemInstance,USkeletalMeshComponent* AttachMesh);
+	AInv_EquipActor* SpawnEquippedActor(EInv_EquipSlot Slot, FInv_EquipmentFragment* EquipmentFragment,
+		UInv_InventoryItem* ItemInstance, USkeletalMeshComponent* AttachMesh);
+
+	UPROPERTY(ReplicatedUsing = OnRep_ActiveWeapon)
+	TObjectPtr<UInv_InventoryItem> ActiveWeaponItem;
+
+	UFUNCTION()
+	void OnRep_ActiveWeapon();
 
 	UPROPERTY()
 	TArray<TObjectPtr<AInv_EquipActor>> EquippedActors;
@@ -88,7 +95,15 @@ private:
 	void RemoveEquippedActor(const FGameplayTag& EquipmentTypeTag);
 
 	UFUNCTION()
-	void OnPossessedPawnChanged(APawn* OP,APawn* NP);
+	void OnPossessedPawnChanged(APawn* OP, APawn* NP);
 
 	FInv_EquipSlotState& GetSlotStateMutable(EInv_EquipSlot Slot);
+
+	UPROPERTY(ReplicatedUsing = OnRep_ActiveWeaponActor)
+	TObjectPtr<AInv_EquipActor> ActiveWeaponActor;
+
+	UFUNCTION()
+	void OnRep_ActiveWeaponActor();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -182,7 +182,6 @@ protected:
 
 	virtual FString GetModuleName_Implementation() const override { return LuaModuleName; }
 
-	// ½Ó¿ÚµÄÄ¬ÈÏÊµÏÖ£¨Lua ²»¹¤×÷Ê±ÈÔÄÜÅÜ£©
 	virtual FMSG_FireRuleResult EvaluateFireRule_Implementation(const FMSG_FireRuleContext& Ctx) override;
 
 	// ===== Reload =====
@@ -330,6 +329,9 @@ public:
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
+	virtual void OnTookDamage(float DamageAmount, AActor* DamageCauser) override;
+	virtual void OnDied() override;
+
 	UFUNCTION(BlueprintCallable)
 	void SetOnHit(bool OnHit) { bOnHit = OnHit; }
 
@@ -338,7 +340,6 @@ public:
 
 	bool bAiming = false;
 
-	// ºó×øÁ¦£¨ÄãÔ­À´µÄ£©
 	bool CheckPitchOffset();
 
 	UPROPERTY(BlueprintReadWrite)
